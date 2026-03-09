@@ -1,0 +1,39 @@
+detector:
+  tau: 3.0
+  c_weight: 0.1
+  quantization_levels: 64
+  transform: tanh
+  significance_top_k: 4
+  max_points: 500
+
+preprocessing:
+  illumination_matching: median_ratio
+  auto_roi_padding: 24
+  auto_roi_percentile: 99.5
+  min_component_area: 50
+
+sequences:
+  WS01:
+    root: data/WoodSample1/IMG
+    pattern: "t{time}_{shot}.png"
+    reference_time: 0
+    candidate_times: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    shots: [1, 2, 3]
+    resize_max_side: 384
+    use_auto_roi: true
+  WS02:
+    root: data/WoodSample2/Img
+    pattern: "t{time}_{shot}.png"
+    reference_time: 0
+    candidate_times: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    shots: [1]
+    resize_max_side: 384
+    use_auto_roi: true
+  SV01:
+    root: data/SampleViolin1/IMG
+    pattern: "T{time}_{shot}.png"
+    reference_time: 0
+    candidate_times: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    shots: [1, 2, 3]
+    resize_max_side: 640
+    use_auto_roi: true
