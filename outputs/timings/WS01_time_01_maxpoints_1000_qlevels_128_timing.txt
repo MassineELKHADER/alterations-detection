@@ -1,0 +1,9 @@
+Sequence: WS01
+Config: configs\uvifl_sequences.yaml
+Max points: 1000
+Quantization levels: 128
+
+time=01 shot=3 elapsed_seconds=298.5316 selected_clusters=4
+
+Total elapsed seconds: 298.5316
+Average per timepoint seconds: 298.5316

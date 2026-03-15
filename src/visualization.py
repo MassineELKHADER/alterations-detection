@@ -12,6 +12,19 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
+def displayable_rgb(image: np.ndarray) -> np.ndarray:
+    image = image.astype(np.float32)
+    if image.size == 0:
+        return image
+    image_min = float(image.min())
+    image_max = float(image.max())
+    if image_max <= 1.0 and image_min >= 0.0:
+        return image
+    if image_max - image_min < 1e-8:
+        return np.zeros_like(image, dtype=np.float32)
+    return (image - image_min) / (image_max - image_min)
+
+
 def binary_mask_image(mask: np.ndarray) -> np.ndarray:
     return np.where(mask, 255, 0).astype(np.uint8)
 
@@ -29,7 +42,7 @@ def save_cluster_gallery(result: DetectionResult, pair: PreparedPair, out_path: 
     fig, axes = plt.subplots(1, columns, figsize=(4 * columns, 4))
 
     axes = np.atleast_1d(axes)
-    axes[0].imshow(pair.target)
+    axes[0].imshow(displayable_rgb(pair.target))
     axes[0].set_title("Current image")
     axes[0].axis("off")
 
@@ -68,15 +81,15 @@ def save_cluster_overlay_panel(result: DetectionResult, pair: PreparedPair, out_
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     axes = np.atleast_1d(axes)
 
-    axes[0].imshow(pair.reference)
+    axes[0].imshow(displayable_rgb(pair.reference))
     axes[0].set_title("Reference")
     axes[0].axis("off")
 
-    axes[1].imshow(pair.target)
+    axes[1].imshow(displayable_rgb(pair.target))
     axes[1].set_title("Current")
     axes[1].axis("off")
 
-    axes[2].imshow(pair.target)
+    axes[2].imshow(displayable_rgb(pair.target))
     axes[2].set_title("Clusters overlay")
     axes[2].axis("off")
 
