@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lower / Upper Volume Explainer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f8f8f6;
+    --bg2: #f0efeb;
+    --text: #1a1a18;
+    --text2: #6b6b65;
+    --border: rgba(0,0,0,0.10);
+    --blue: #378ADD;
+    --blue-fill: rgba(59,139,212,0.35);
+    --amber: #EF9F27;
+    --amber-fill: rgba(239,159,39,0.20);
+    --green-fill: rgba(99,153,34,0.35);
+    --pt: #D85A30;
+    --pt-fade: rgba(216,90,48,0.15);
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141413;
+      --bg2: #1e1e1c;
+      --text: #e8e7e0;
+      --text2: #9c9a92;
+      --border: rgba(255,255,255,0.08);
+      --pt: #F09595;
+      --pt-fade: rgba(240,149,149,0.25);
+    }
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    padding: 24px 20px 40px;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 17px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: var(--text2); margin-bottom: 16px; }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .ctrl-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text2);
+  }
+  .ctrl-group .val {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    min-width: 40px;
+  }
+  input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--text);
+    cursor: pointer;
+  }
+  select {
+    font-size: 13px;
+    background: var(--bg2);
+    color: var(--text);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 4px 8px;
+    cursor: pointer;
+    outline: none;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    border-radius: var(--radius);
+    margin: 4px 0 10px;
+  }
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 12px; }
+  .legend-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat {
+    background: var(--bg2);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+  .stat .n { font-size: 20px; font-weight: 500; margin-bottom: 2px; }
+  .stat .l { font-size: 11px; color: var(--text2); }
+  .note { font-size: 12px; color: var(--text2); }
+  .dendro-wrap { margin: 14px 0 10px; }
+  .dendro-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+  #dendro { display: block; width: 100%; }
+
+  .table-section { margin: 18px 0 10px; }
+  .summary-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 10px 0; }
+  .summary-table th {
+    text-align: left; font-weight: 500; font-size: 12px;
+    padding: 7px 10px; border-bottom: 1px solid var(--border);
+    color: var(--text2);
+  }
+  .summary-table td {
+    padding: 6px 10px; border-bottom: 0.5px solid var(--border);
+    color: var(--text);
+  }
+  .summary-table tr.sep td { border-top: 1px solid var(--border); }
+  .summary-table tbody tr:hover td { background: var(--bg2); }
+  .tag {
+    font-size: 11px; font-weight: 400;
+    background: var(--bg2); border: 0.5px solid var(--border);
+    border-radius: 4px; padding: 1px 5px; color: var(--text2);
+  }
+  .muted { color: var(--text2); font-size: 12px; }
+  .latex-box {
+    background: var(--bg2); border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+    padding: 10px 14px; margin: 10px 0;
+  }
+  .latex-label { font-size: 11px; color: var(--text2); margin-bottom: 6px; }
+  .latex-render { font-size: 15px; overflow-x: auto; }
+  .latex-src {
+    font-family: var(--font-mono, monospace); font-size: 11px;
+    color: var(--text2); margin-top: 6px;
+    border-top: 0.5px solid var(--border); padding-top: 5px;
+  }
+</style>
+</head>
+<body>
+<h1>Lower &amp; Upper Volume — Visual Explainer</h1>
+<p class="subtitle" id="subtitle">10×10 grid · 5 z-levels · 4 cluster points</p>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Z level</label>
+    <input type="range" id="zslider" min="1" max="5" step="1" value="1" style="width:110px">
+    <span class="val" id="zlabel">z = 1</span>
+  </div>
+  <div class="ctrl-group">
+    <label>c</label>
+    <input type="range" id="cwslider" min="0.01" max="1" step="0.01" value="0.1" style="width:90px">
+    <span class="val" id="cwlabel">0.5</span>
+  </div>
+  <div class="ctrl-group">
+    <label>View</label>
+    <select id="viewsel">
+      <option value="lower">Lower volume (r = δ/2)</option>
+      <option value="upper">Upper volume (r = δ₀)</option>
+      <option value="both">Both overlaid</option>
+    </select>
+  </div>
+</div>
+
+<canvas id="grid" width="660" height="330"></canvas>
+
+<div class="legend">
+  <div class="legend-row"><div class="swatch" style="background:rgba(59,139,212,0.40);border:1.5px solid #378ADD"></div> Lower volume — cluster C (tight)</div>
+  <div class="legend-row"><div class="swatch" style="background:rgba(239,159,39,0.25);border:1.5px solid #EF9F27"></div> Upper volume — cluster C spheres (p1, p2, p3)</div>
+  <div class="legend-row"><div class="swatch" style="background:rgba(216,90,48,0.25);border:1.5px solid #D85A30"></div> Upper volume — outside point p4</div>
+  <div class="legend-row"><div class="swatch" style="background:#D85A30;border-radius:50%"></div> Points (solid = active z level)</div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat"><div class="n" id="sv-lower">—</div><div class="l">lower volume</div></div>
+  <div class="stat"><div class="n" id="sv-upper">—</div><div class="l">upper volume</div></div>
+  <div class="stat"><div class="n" id="sv-ratio">—</div><div class="l">area ratio (r²)</div></div>
+</div>
+
+<p class="note" id="note-formula">D(i,j) = √( (xᵢ−xⱼ)² + (yᵢ−yⱼ)² + c×(zᵢ²+zⱼ²) ) &nbsp;·&nbsp; <span id="note-vals"></span></p>
+
+<div class="table-section">
+  <p class="dendro-label" style="margin-bottom:10px">Summary — c = 0.1, grid 10×10×5 = 500 voxels</p>
+
+  <div class="latex-box">
+    <div class="latex-label">Distance metric</div>
+    <div class="latex-render" id="latex-dist"></div>
+    <div class="latex-src">D(i,j) = \sqrt{\left(D_{sp}(i,j)\right)^2 + c \times \left(z_i^2 + z_j^2\right)}</div>
+  </div>
+
+  <div class="latex-box">
+    <div class="latex-label">Lower volume radius &amp; upper volume radius</div>
+    <div class="latex-render" id="latex-radii"></div>
+    <div class="latex-src">r_{\text{lower}} = \frac{\delta}{2}, \quad r_{\text{upper}} = \delta_0, \quad \delta = \max_{i,j \in C} D(i,j), \quad \delta_0 = \min_{i \in C,\, j \notin C} D(i,j)</div>
+  </div>
+
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th></th>
+        <th>Cluster 1 &nbsp;<span class="tag">{p1, p2, p3}</span></th>
+        <th>Cluster 2 &nbsp;<span class="tag">{p4}</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>δ &nbsp;(max pairwise)</td><td>D(p2,p3) = 1.581</td><td>0 &nbsp;<span class="muted">(single point)</span></td></tr>
+      <tr><td>δ₀ &nbsp;(dist to nearest outside)</td><td>D(p2,p4) = 3.834</td><td>D(p4,p2) = 3.834</td></tr>
+      <tr><td>r_lower = δ/2</td><td>0.791</td><td>0</td></tr>
+      <tr><td>r_upper = δ₀</td><td>3.834</td><td>3.834</td></tr>
+      <tr class="sep"><td>lower_volume</td><td>5 / 500 = <strong>0.010</strong></td><td>0 / 500 = <strong>0</strong></td></tr>
+      <tr><td>upper_volume</td><td>223 / 500 = <strong>0.446</strong></td><td>193 / 500 = <strong>0.386</strong></td></tr>
+      <tr><td>ratio upper/lower (voxels)</td><td><strong>44.6×</strong></td><td>∞</td></tr>
+      <tr><td>(r_upper / r_lower)²</td><td><strong>23.5×</strong></td><td>∞</td></tr>
+    </tbody>
+  </table>
+
+  <div class="latex-box" style="margin-top:14px">
+    <div class="latex-label">NFA probability term</div>
+    <div class="latex-render" id="latex-nfa"></div>
+    <div class="latex-src">P = \sum_{t=k}^{m} \binom{m}{t} \left(V_{\text{lower}}\right)^t \left(1 - V_{\text{upper}}\right)^{m-t}</div>
+  </div>
+
+  <p class="note" style="margin-top:8px">
+    δ₀ is symmetric — the nearest cross-cluster pair (p2↔p4, D≈3.834) is the same for both clusters, just seen from opposite sides.
+    Cluster 2's r_lower = 0 because a single point has no pairwise distance; singleton clusters are typically handled as a special case in the NFA.
+  </p>
+</div>
+
+<div class="dendro-wrap">
+  <p class="dendro-label">Distance diagram — where δ and δ₀ come from</p>
+  <canvas id="dendro" width="660" height="200"></canvas>
+</div>
+
+<script>
+const POINTS = [{x:2,y:2,z:1,label:'p1'},{x:3,y:2,z:1,label:'p2'},{x:2,y:3,z:2,label:'p3'},{x:5,y:5,z:4,label:'p4'}];
+const CLUSTER = [0,1,2];
+const GRID=10, ZLEV=5;
+const outsideIdx=[3];
+
+// Correct distance: D(i,j) = sqrt((xi-xj)^2 + (yi-yj)^2 + c*(zi^2 + zj^2))
+function dist3D(a,b,c){ return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+c*(a.z**2+b.z**2)); }
+
+// Recompute all δ-derived values whenever c changes
+let DELTA, DELTA0, R_LOWER, R_UPPER, deltaA, deltaB, closestCI, closestOI;
+function recomputeDeltas(c){
+  DELTA=0; deltaA=0; deltaB=1;
+  for(let i=0;i<CLUSTER.length;i++) for(let j=i+1;j<CLUSTER.length;j++){
+    const d=dist3D(POINTS[CLUSTER[i]],POINTS[CLUSTER[j]],c);
+    if(d>DELTA){DELTA=d;deltaA=CLUSTER[i];deltaB=CLUSTER[j];}
+  }
+  DELTA0=Infinity; closestCI=CLUSTER[0]; closestOI=outsideIdx[0];
+  for(const ci of CLUSTER) for(const oi of outsideIdx){
+    const d=dist3D(POINTS[ci],POINTS[oi],c);
+    if(d<DELTA0){DELTA0=d;closestCI=ci;closestOI=oi;}
+  }
+  R_LOWER=DELTA/2;
+  R_UPPER=DELTA0;
+  // update note
+  document.getElementById('note-vals').textContent =
+    'δ = '+DELTA.toFixed(3)+' → r_lower = '+R_LOWER.toFixed(3)
+    +' · δ₀ = '+DELTA0.toFixed(3)+' → r_upper = '+DELTA0.toFixed(3);
+  document.getElementById('subtitle').textContent =
+    '10×10 grid · 5 z-levels · D(i,j) uses c='+c.toFixed(2)
+    +' · δ ≈ '+DELTA.toFixed(2)+' · δ₀ ≈ '+DELTA0.toFixed(2);
+}
+
+// inSphere uses the same D formula: D(voxel, point) <= r
+// D(v,p) = sqrt((vx-px)^2+(vy-py)^2+c*(vz^2+pz^2))
+function inSphere(vx,vy,vz,px,py,pz,r,c){
+  return (vx-px)**2+(vy-py)**2+c*(vz**2+pz**2) <= r*r;
+}
+function computeVolume(r,c){
+  let count=0;
+  for(let z=1;z<=ZLEV;z++)
+    for(let y=0;y<GRID;y++)
+      for(let x=0;x<GRID;x++)
+        if(POINTS.some(p=>inSphere(x,y,z,p.x,p.y,p.z,r,c))) count++;
+  return count/(GRID*GRID*ZLEV);
+}
+// Per-point colors: cluster members (p1,p2,p3) share amber, outside point (p4) gets coral
+const PT_COLORS = [
+  {fill:'rgba(239,159,39,0.25)',  stroke:'#EF9F27', label:'p1 sphere'},
+  {fill:'rgba(239,159,39,0.25)',  stroke:'#EF9F27', label:'p2 sphere'},
+  {fill:'rgba(239,159,39,0.25)',  stroke:'#EF9F27', label:'p3 sphere'},
+  {fill:'rgba(216,90,48,0.25)',   stroke:'#D85A30', label:'p4 sphere'},
+];
+
+// Returns grid where each cell = array of point indices whose sphere covers it
+function occupiedPerPoint(r,c,z){
+  const grid=[];
+  for(let y=0;y<GRID;y++){
+    const row=[];
+    for(let x=0;x<GRID;x++){
+      const owners=[];
+      POINTS.forEach((p,i)=>{ if(inSphere(x,y,z,p.x,p.y,p.z,r,c)) owners.push(i); });
+      row.push(owners);
+    }
+    grid.push(row);
+  }
+  return grid;
+}
+// Flat boolean grid for lower volume outline (unchanged use)
+function occupiedAt(r,c,z){
+  const grid=[];
+  for(let y=0;y<GRID;y++){
+    const row=[];
+    for(let x=0;x<GRID;x++)
+      row.push(POINTS.some(p=>inSphere(x,y,z,p.x,p.y,p.z,r,c)));
+    grid.push(row);
+  }
+  return grid;
+}
+
+function draw(){
+  const z=+document.getElementById('zslider').value;
+  const c=+document.getElementById('cwslider').value;
+  const view=document.getElementById('viewsel').value;
+  document.getElementById('zlabel').textContent=`z = ${z}`;
+  document.getElementById('cwlabel').textContent=c.toFixed(2);
+
+  recomputeDeltas(c);
+
+  const vl=computeVolume(R_LOWER,c);
+  const vu=computeVolume(R_UPPER,c);
+  document.getElementById('sv-lower').textContent=vl.toFixed(3);
+  document.getElementById('sv-upper').textContent=vu.toFixed(3);
+  document.getElementById('sv-ratio').textContent=((R_UPPER/R_LOWER)**2).toFixed(1)+'×';
+
+  const gl=occupiedAt(R_LOWER,c,z);
+  const gu=occupiedPerPoint(R_UPPER,c,z);
+  const guFlat=gu.map(row=>row.map(owners=>owners.length>0));
+
+  const canvas=document.getElementById('grid');
+  const ctx=canvas.getContext('2d');
+  const W=canvas.width, H=canvas.height;
+  const CELL=Math.floor((Math.min(W,H)-64)/GRID);
+  const OX=(W-CELL*GRID)/2, OY=(H-CELL*GRID)/2;
+
+  ctx.clearRect(0,0,W,H);
+  const isDark=matchMedia('(prefers-color-scheme:dark)').matches;
+  ctx.fillStyle=isDark?'#1e1e1c':'#f0efeb';
+  ctx.fillRect(0,0,W,H);
+
+  for(let y=0;y<GRID;y++){
+    for(let x=0;x<GRID;x++){
+      const cx=OX+x*CELL, cy=OY+y*CELL;
+      const inL=gl[y][x];
+      const owners=gu[y][x];
+
+      // Upper volume: paint each owning point's color in sequence (overlap = blend via alpha)
+      if(view==='upper'||view==='both'){
+        owners.forEach(i=>{ ctx.fillStyle=PT_COLORS[i].fill; ctx.fillRect(cx,cy,CELL,CELL); });
+      }
+      // Lower volume on top: solid blue tint
+      if((view==='lower'||view==='both')&&inL){
+        ctx.fillStyle='rgba(59,139,212,0.40)'; ctx.fillRect(cx,cy,CELL,CELL);
+      }
+      ctx.strokeStyle=isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)';
+      ctx.lineWidth=0.5; ctx.strokeRect(cx,cy,CELL,CELL);
+    }
+  }
+
+  // outline lower (single unified border — lower is always the union)
+  if(view==='lower'||view==='both'){
+    ctx.strokeStyle='#378ADD'; ctx.lineWidth=1.5;
+    for(let y=0;y<GRID;y++) for(let x=0;x<GRID;x++){
+      if(!gl[y][x]) continue;
+      const cx=OX+x*CELL, cy=OY+y*CELL;
+      if(x===0||!gl[y][x-1]){ ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx,cy+CELL);ctx.stroke(); }
+      if(x===GRID-1||!gl[y][x+1]){ ctx.beginPath();ctx.moveTo(cx+CELL,cy);ctx.lineTo(cx+CELL,cy+CELL);ctx.stroke(); }
+      if(y===0||!gl[y-1][x]){ ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+CELL,cy);ctx.stroke(); }
+      if(y===GRID-1||!gl[y+1][x]){ ctx.beginPath();ctx.moveTo(cx,cy+CELL);ctx.lineTo(cx+CELL,cy+CELL);ctx.stroke(); }
+    }
+  }
+  // outline upper: per-point colored borders
+  if(view==='upper'||view==='both'){
+    POINTS.forEach((pt,i)=>{
+      ctx.strokeStyle=PT_COLORS[i].stroke; ctx.lineWidth=1.5;
+      for(let y=0;y<GRID;y++) for(let x=0;x<GRID;x++){
+        if(!gu[y][x].includes(i)) continue;
+        const cx=OX+x*CELL, cy=OY+y*CELL;
+        const leftOut =x===0||!gu[y][x-1].includes(i);
+        const rightOut=x===GRID-1||!gu[y][x+1].includes(i);
+        const topOut  =y===0||!gu[y-1][x].includes(i);
+        const botOut  =y===GRID-1||!gu[y+1][x].includes(i);
+        if(leftOut) { ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx,cy+CELL);ctx.stroke(); }
+        if(rightOut){ ctx.beginPath();ctx.moveTo(cx+CELL,cy);ctx.lineTo(cx+CELL,cy+CELL);ctx.stroke(); }
+        if(topOut)  { ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+CELL,cy);ctx.stroke(); }
+        if(botOut)  { ctx.beginPath();ctx.moveTo(cx,cy+CELL);ctx.lineTo(cx+CELL,cy+CELL);ctx.stroke(); }
+      }
+    });
+  }
+
+  // --- radius circles on active points ---
+  POINTS.filter(p=>p.z===z).forEach((p,_,arr)=>{
+    const pi=POINTS.indexOf(p);
+    const pcol=PT_COLORS[pi];
+    const cx=OX+p.x*CELL+CELL/2, cy=OY+p.y*CELL+CELL/2;
+    if(view==='upper'||view==='both'){
+      ctx.beginPath();
+      ctx.arc(cx, cy, R_UPPER*CELL, 0, Math.PI*2);
+      ctx.strokeStyle=pcol.stroke+'99'; ctx.lineWidth=1.2;
+      ctx.setLineDash([4,3]); ctx.stroke(); ctx.setLineDash([]);
+      if(p===arr[0]){
+        ctx.beginPath();
+        ctx.moveTo(cx,cy); ctx.lineTo(cx+R_UPPER*CELL,cy);
+        ctx.strokeStyle=pcol.stroke+'bb'; ctx.lineWidth=1; ctx.stroke();
+        ctx.fillStyle=pcol.stroke; ctx.font='bold 11px sans-serif';
+        ctx.textAlign='center'; ctx.textBaseline='bottom';
+        ctx.fillText('r = δ₀ ≈ '+R_UPPER.toFixed(2), cx+R_UPPER*CELL/2, cy-3);
+      }
+    }
+    if(view==='lower'||view==='both'){
+      ctx.beginPath();
+      ctx.arc(cx, cy, R_LOWER*CELL, 0, Math.PI*2);
+      ctx.strokeStyle='rgba(59,139,212,0.8)'; ctx.lineWidth=1.5;
+      ctx.setLineDash([3,2]); ctx.stroke(); ctx.setLineDash([]);
+      if(p===arr[0]){
+        ctx.beginPath();
+        ctx.moveTo(cx,cy); ctx.lineTo(cx+R_LOWER*CELL,cy);
+        ctx.strokeStyle='rgba(59,139,212,0.8)'; ctx.lineWidth=1; ctx.stroke();
+        ctx.fillStyle='#378ADD'; ctx.font='bold 11px sans-serif';
+        ctx.textAlign='center'; ctx.textBaseline='top';
+        ctx.fillText('r = δ/2 ≈ '+R_LOWER.toFixed(2), cx+R_LOWER*CELL/2, cy+4);
+      }
+    }
+  });
+
+  // --- δ line: max-distance pair inside cluster ---
+  // Show when both points of the pair share an xy projection (they may be on different z)
+  {
+    const pA=POINTS[deltaA], pB=POINTS[deltaB];
+    const ax=OX+pA.x*CELL+CELL/2, ay=OY+pA.y*CELL+CELL/2;
+    const bx=OX+pB.x*CELL+CELL/2, by=OY+pB.y*CELL+CELL/2;
+    // show on all z levels so user always sees it; fade if neither endpoint is on this z
+    const active=(pA.z===z||pB.z===z);
+    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by);
+    ctx.strokeStyle=active?'#378ADD':'rgba(55,138,221,0.25)';
+    ctx.lineWidth=active?2:1; ctx.setLineDash([5,3]); ctx.stroke(); ctx.setLineDash([]);
+    if(active){
+      const mx=(ax+bx)/2, my=(ay+by)/2;
+      ctx.fillStyle='#378ADD'; ctx.font='bold 11px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText('δ = max pair ≈ '+DELTA.toFixed(2), mx, my-4);
+    }
+  }
+
+  // --- δ0 line: closest cluster pt → outside pt ---
+  {
+    const pC=POINTS[closestCI], pO=POINTS[closestOI];
+    const cx2=OX+pC.x*CELL+CELL/2, cy2=OY+pC.y*CELL+CELL/2;
+    const ox2=OX+pO.x*CELL+CELL/2, oy2=OY+pO.y*CELL+CELL/2;
+    const active=(pC.z===z||pO.z===z);
+    ctx.beginPath(); ctx.moveTo(cx2,cy2); ctx.lineTo(ox2,oy2);
+    ctx.strokeStyle=active?'#EF9F27':'rgba(239,159,39,0.2)';
+    ctx.lineWidth=active?2:1; ctx.setLineDash([5,3]); ctx.stroke(); ctx.setLineDash([]);
+    if(active){
+      const mx=(cx2+ox2)/2, my=(cy2+oy2)/2;
+      ctx.fillStyle='#EF9F27'; ctx.font='bold 11px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText('δ₀ ≈ '+DELTA0.toFixed(2), mx, my-4);
+    }
+  }
+
+  // points (drawn on top of circles)
+  POINTS.forEach(p=>{
+    const cx=OX+p.x*CELL+CELL/2, cy=OY+p.y*CELL+CELL/2;
+    const active=p.z===z;
+    ctx.beginPath();
+    ctx.arc(cx,cy,active?7:4,0,Math.PI*2);
+    ctx.fillStyle=active?(isDark?'#F09595':'#D85A30'):(isDark?'rgba(240,149,149,0.25)':'rgba(216,90,48,0.15)');
+    ctx.fill();
+    if(active){
+      ctx.strokeStyle=isDark?'#F09595':'#D85A30'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.fillStyle='#fff'; ctx.font='bold 9px sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(p.label,cx,cy);
+    }
+  });
+
+  // axis labels
+  ctx.fillStyle=isDark?'rgba(255,255,255,0.3)':'rgba(0,0,0,0.3)';
+  ctx.font='11px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let x=0;x<GRID;x++) ctx.fillText(x,OX+x*CELL+CELL/2,OY+GRID*CELL+5);
+  ctx.textAlign='right'; ctx.textBaseline='middle';
+  for(let y=0;y<GRID;y++) ctx.fillText(y,OX-5,OY+y*CELL+CELL/2);
+
+  drawDendro(isDark, c);
+}
+
+function drawDendro(isDark, c){
+  const cvs=document.getElementById('dendro');
+  const ctx=cvs.getContext('2d');
+  const W=cvs.width, H=cvs.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle=isDark?'#1e1e1c':'#f0efeb';
+  ctx.fillRect(0,0,W,H);
+
+  // Draw a schematic distance diagram:
+  // Left: cluster box with p1,p2,p3 and their pairwise distances
+  // Right: p4 outside, with arrow showing δ0
+  const isDarkM=isDark;
+  const textCol=isDark?'#e8e7e0':'#1a1a18';
+  const mutedCol=isDark?'rgba(255,255,255,0.35)':'rgba(0,0,0,0.35)';
+  const ptColor=isDark?'#F09595':'#D85A30';
+
+  // cluster bounding box
+  const BOX_X=60, BOX_Y=30, BOX_W=320, BOX_H=140;
+  ctx.strokeStyle=isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.2)';
+  ctx.lineWidth=1; ctx.setLineDash([6,4]);
+  ctx.strokeRect(BOX_X,BOX_Y,BOX_W,BOX_H);
+  ctx.setLineDash([]);
+  ctx.fillStyle=mutedCol; ctx.font='11px sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText('cluster C = {p1, p2, p3}', BOX_X+8, BOX_Y+5);
+
+  // point positions inside box (scaled from actual coords)
+  // p1(2,2) p2(3,2) p3(2,3) — scale to box
+  const pts2d = [
+    {x:BOX_X+60,  y:BOX_Y+55, label:'p1'},
+    {x:BOX_X+160, y:BOX_Y+55, label:'p2'},
+    {x:BOX_X+60,  y:BOX_Y+110,label:'p3'},
+  ];
+  // p4 outside — positioned closer to reflect (5,5) vs old (7,7)
+  const p4pos={x:490, y:BOX_Y+75};
+
+  // draw pairwise distance lines inside cluster
+  const pairs=[[0,1],[0,2],[1,2]];
+  const pairDists=[
+    dist3D(POINTS[0],POINTS[1],c).toFixed(2),
+    dist3D(POINTS[0],POINTS[2],c).toFixed(2),
+    dist3D(POINTS[1],POINTS[2],c).toFixed(2),
+  ];
+  const maxPairIdx = pairDists.indexOf(pairDists.reduce((a,b)=>parseFloat(a)>parseFloat(b)?a:b));
+
+  pairs.forEach(([i,j],k)=>{
+    const a=pts2d[i],b=pts2d[j];
+    const isMax=(k===maxPairIdx);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y);
+    ctx.strokeStyle=isMax?'#378ADD':(isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)');
+    ctx.lineWidth=isMax?2:1;
+    ctx.setLineDash(isMax?[5,3]:[3,3]); ctx.stroke(); ctx.setLineDash([]);
+    const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+    ctx.fillStyle=isMax?'#378ADD':mutedCol;
+    ctx.font=isMax?'bold 11px sans-serif':'11px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    const off=isMax?-10:8;
+    ctx.fillText(pairDists[k], mx+(j===2?10:0), my+off);
+  });
+
+  // δ label
+  ctx.fillStyle='#378ADD'; ctx.font='bold 12px sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText('δ = max pairwise = '+DELTA.toFixed(3)+' → r_lower = δ/2 = '+R_LOWER.toFixed(3), BOX_X, BOX_Y+BOX_H+10);
+
+  // δ0: line from closest cluster pt (p3) to p4
+  const closestPt=pts2d[CLUSTER.indexOf(closestCI)];
+  ctx.beginPath(); ctx.moveTo(closestPt.x,closestPt.y); ctx.lineTo(p4pos.x,p4pos.y);
+  ctx.strokeStyle='#EF9F27'; ctx.lineWidth=2; ctx.setLineDash([5,3]); ctx.stroke(); ctx.setLineDash([]);
+  const mx2=(closestPt.x+p4pos.x)/2, my2=(closestPt.y+p4pos.y)/2;
+  ctx.fillStyle='#EF9F27'; ctx.font='bold 12px sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillText('δ₀ = dist(C, nearest outside) = '+DELTA0.toFixed(3)+' → r_upper = δ₀', mx2, my2-5);
+
+  // draw points
+  [...pts2d,p4pos].forEach((p,i)=>{
+    const isCluster=i<3;
+    ctx.beginPath(); ctx.arc(p.x,p.y,8,0,Math.PI*2);
+    ctx.fillStyle=isCluster?ptColor:(isDark?'rgba(240,149,149,0.35)':'rgba(216,90,48,0.3)');
+    ctx.fill();
+    ctx.strokeStyle=ptColor; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font='bold 9px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(p.label||'p4', p.x, p.y);
+  });
+
+  // p4 outside label
+  ctx.fillStyle=mutedCol; ctx.font='11px sans-serif';
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('outside point', p4pos.x, p4pos.y+12);
+}
+
+document.getElementById('zslider').oninput=draw;
+document.getElementById('cwslider').oninput=draw;
+document.getElementById('viewsel').onchange=draw;
+draw();
+</script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script>
+const latexFormulas = {
+  'latex-dist':  'D(i,j) = \\sqrt{\\left(D_{sp}(i,j)\\right)^2 + c \\times \\left(z_i^2 + z_j^2\\right)}',
+  'latex-radii': 'r_{\\text{lower}} = \\dfrac{\\delta}{2}, \\quad r_{\\text{upper}} = \\delta_0, \\quad \\delta = \\max_{i,j \\in C} D(i,j), \\quad \\delta_0 = \\min_{\\substack{i \\in C \\\\ j \\notin C}} D(i,j)',
+  'latex-nfa':   'P = \\sum_{t=k}^{m} \\binom{m}{t} \\left(V_{\\text{lower}}\\right)^t \\left(1 - V_{\\text{upper}}\\right)^{m-t}',
+};
+Object.entries(latexFormulas).forEach(([id, tex]) => {
+  const el = document.getElementById(id);
+  if (el) katex.render(tex, el, {throwOnError: false, displayMode: true});
+});
+</script>
+</body>
+</html>
