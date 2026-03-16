@@ -28,15 +28,40 @@ class ClusterCandidate:
     significance: float
 
 
+# def apply_gray_transform(values: np.ndarray, tau: float, kind: str) -> np.ndarray:
+#     """ Applies a gray-level transformation to the input values based on the specified kind and threshold tau."""
+#     if kind == "tanh": 
+#         values = values.astype(np.float32)
+#         transformed = np.full_like(values, np.inf, dtype=np.float32)
+#         valid = values >= tau
+#         transformed[valid] = 1.0 + np.tanh(tau - values[valid])
+#         return transformed
+#     if kind == "inverse":
+#         values = values.astype(np.float32)
+#         transformed = np.full_like(values, np.inf, dtype=np.float32)
+#         valid = values >= tau
+#         transformed[valid] = 1.0 / (1.0 + (values / tau)**2)
+#         return transformed
+#     raise ValueError(f"Unsupported transform: {kind}")
+
 def apply_gray_transform(values: np.ndarray, tau: float, kind: str) -> np.ndarray:
-    """ Applies a gray-level transformation to the input values based on the specified kind and threshold tau."""
+    """Applies a gray-level transformation to the input values based on the specified kind and threshold tau."""
     values = values.astype(np.float32)
     transformed = np.full_like(values, np.inf, dtype=np.float32)
-    valid = values >= tau
-    if kind != "tanh":
-        raise ValueError(f"Unsupported transform: {kind}")
-    transformed[valid] = 1.0 + np.tanh(tau - values[valid])
-    return transformed
+
+    if kind == "tanh":
+        valid = values >= tau
+        transformed[valid] = 1.0 + np.tanh(tau - values[valid])
+        return transformed
+
+    if kind == "inverse":
+        if tau == 0:
+            raise ValueError("tau must be non-zero for the inverse transform")
+        valid = values >= tau
+        transformed[valid] = 1.0 / (1.0 + (values[valid] / tau) ** 2)
+        return transformed
+
+    raise ValueError(f"Unsupported transform: {kind}")
 
 
 def make_point_cloud(
