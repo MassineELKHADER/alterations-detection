@@ -32,7 +32,7 @@ detector:
 simulation:
   image_height: 120
   image_width: 180
-  repetitions: 1   # Set to 10 for statistically meaningful results (paper uses 10)
+  repetitions: 10   # Set to 10 for statistically meaningful results (paper uses 10)
   background_shape_mu: 0.6
   experiment_one_background_omega_values: [2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 12.0, 13.0, 14.0, 15.0]
   experiment_two_foreground_shifts: [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5]

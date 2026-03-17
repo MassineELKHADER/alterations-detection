@@ -106,6 +106,13 @@ def make_point_cloud(
 def pairwise_distance_matrix(point_cloud: CandidatePointCloud, c_weight: float) -> np.ndarray:
     """Computes a pairwise distance matrix for the candidate points in the point cloud."""
     coords = point_cloud.coordinates.astype(np.float32)
+
+    if c_weight == 0.0:
+        delta = coords[:, None, :] - coords[None, :, :]
+        distance = np.sqrt(np.sum(delta * delta, axis=-1))
+        np.fill_diagonal(distance, 0.0)
+        return distance
+
     # FIX: use float transformed z, not quantized integers (same fix as model.py)
     # z2 = np.square(point_cloud.quantized.astype(np.float32))  # WRONG
     z2 = np.square(point_cloud.transformed.astype(np.float32))  # FIXED
@@ -183,6 +190,17 @@ def discrete_dilated_volume_numba(
         return 0.0
 
     height, width = image_shape
+
+    if c_weight == 0.0:
+        occupancy_2d = np.zeros((height, width), dtype=bool)
+        rr_off, cc_off = get_disk_offsets(radius)
+        for (y, x) in cluster_xy:
+            rr = rr_off + int(y)
+            cc = cc_off + int(x)
+            valid = (rr >= 0) & (rr < height) & (cc >= 0) & (cc < width)
+            occupancy_2d[rr[valid], cc[valid]] = True
+        return float(occupancy_2d.sum()) / float(height * width)
+
     occupancy = np.zeros((z_levels, height, width), dtype=np.bool_)
     z_grid = np.arange(z_levels, dtype=np.float32)
     cluster_z = cluster_z.astype(np.int32, copy=False)

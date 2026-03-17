@@ -121,6 +121,13 @@ def pairwise_distance_matrix(point_cloud: CandidatePointCloud, c_weight: float) 
     """ Computes a pairwise distance matrix for the candidate points in the point cloud, combining spatial and intensity differences."""
     coords = point_cloud.coordinates.astype(np.float32)
 
+    # Shortcut: if c_weight=0 the z-axis contributes nothing — pure spatial distance
+    if c_weight == 0.0:
+        delta = coords[:, None, :] - coords[None, :, :]
+        distance = np.sqrt(np.sum(delta * delta, axis=-1))
+        np.fill_diagonal(distance, 0.0)
+        return distance
+
     # FIX: Paper Eq.(1) defines D(i,j) = sqrt(D_sp^2 + c*(z_i^2 + z_j^2))
     # where z_i = f(y_i) are the FLOAT transformed gray-level values, NOT quantized integers.
     # The quantized values are only used in the volume computation (morphological dilation).
@@ -214,6 +221,18 @@ def discrete_dilated_volume_cached(
         return 0.0
 
     height, width = image_shape
+
+    # Shortcut: c_weight=0 → z-axis irrelevant, volume = 2D spatial area / (H*W)
+    if c_weight == 0.0:
+        occupancy_2d = np.zeros((height, width), dtype=bool)
+        rr_off, cc_off = get_disk_offsets(radius)
+        for (y, x) in cluster_xy:
+            rr = rr_off + int(y)
+            cc = cc_off + int(x)
+            valid = (rr >= 0) & (rr < height) & (cc >= 0) & (cc < width)
+            occupancy_2d[rr[valid], cc[valid]] = True
+        return float(occupancy_2d.sum()) / float(height * width)
+
     occupancy = np.zeros((z_levels, height, width), dtype=bool)
     z_grid = np.arange(z_levels, dtype=np.float32)
 
