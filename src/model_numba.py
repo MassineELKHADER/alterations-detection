@@ -1,15 +1,17 @@
 from dataclasses import dataclass
-import time
+
 import numpy as np
+from numba import njit
 from scipy.cluster.hierarchy import linkage
 from scipy.special import gammaln, logsumexp
 from skimage.draw import disk
+import time
 from tqdm import tqdm
 
 
 @dataclass(frozen=True)
 class CandidatePointCloud:
-    """ Represents a point cloud of candidate alteration points """
+    """Represents a point cloud of candidate alteration points."""
     coordinates: np.ndarray
     transformed: np.ndarray
     quantized: np.ndarray
@@ -20,31 +22,15 @@ class CandidatePointCloud:
 
 @dataclass(frozen=True)
 class ClusterCandidate:
-    """ Represents a cluster of candidate alteration points """
+    """Represents a cluster of candidate alteration points."""
     node_id: int
     member_indices: np.ndarray
     delta: float
     parent_delta: float
-    lower_volume: float 
+    lower_volume: float
     upper_volume: float
     significance: float
 
-
-# def apply_gray_transform(values: np.ndarray, tau: float, kind: str) -> np.ndarray:
-#     """ Applies a gray-level transformation to the input values based on the specified kind and threshold tau."""
-#     if kind == "tanh": 
-#         values = values.astype(np.float32)
-#         transformed = np.full_like(values, np.inf, dtype=np.float32)
-#         valid = values >= tau
-#         transformed[valid] = 1.0 + np.tanh(tau - values[valid])
-#         return transformed
-#     if kind == "inverse":
-#         values = values.astype(np.float32)
-#         transformed = np.full_like(values, np.inf, dtype=np.float32)
-#         valid = values >= tau
-#         transformed[valid] = 1.0 / (1.0 + (values / tau)**2)
-#         return transformed
-#     raise ValueError(f"Unsupported transform: {kind}")
 
 def apply_gray_transform(values: np.ndarray, tau: float, kind: str) -> np.ndarray:
     """Applies a gray-level transformation to the input values based on the specified kind and threshold tau."""
@@ -52,19 +38,16 @@ def apply_gray_transform(values: np.ndarray, tau: float, kind: str) -> np.ndarra
     transformed = np.full_like(values, np.inf, dtype=np.float32)
 
     if kind == "tanh":
-        # Paper Section 3.2: f2(x) = 1 + tanh(tau - x) for x >= tau, else +inf
         valid = values >= tau
         transformed[valid] = 1.0 + np.tanh(tau - values[valid])
         return transformed
 
     if kind == "inverse":
-        # FIX: Paper Section 3.2 defines f1(x) = 1 / (x - tau) for x >= tau
-        # Previous (wrong) formula was: 1.0 / (1.0 + (values[valid] / tau) ** 2)
         if tau == 0:
             raise ValueError("tau must be non-zero for the inverse transform")
         valid = values >= tau
         # transformed[valid] = 1.0 / (1.0 + (values[valid] / tau) ** 2)  # WRONG
-        transformed[valid] = 1.0 / (values[valid] - tau + 1e-9)  # Paper: f1(x) = 1/(x-tau), +eps for numerical safety
+        transformed[valid] = 1.0 / (values[valid] - tau + 1e-9)  # Paper: f1(x) = 1/(x-tau)
         return transformed
 
     raise ValueError(f"Unsupported transform: {kind}")
@@ -77,18 +60,20 @@ def make_point_cloud(
     z_levels: int,
     max_points: int | None = None,
 ) -> CandidatePointCloud:
-    """ Generates a point cloud of candidate alteration points from the input difference map"""
+    """Generates a point cloud of candidate alteration points from the input difference map."""
     transformed = apply_gray_transform(diff_map, tau=tau, kind=transform)
     finite_mask = np.isfinite(transformed)
     ys, xs = np.nonzero(finite_mask)
     finite_values = transformed[finite_mask]
     raw_values = diff_map[finite_mask]
+
     if max_points is not None and finite_values.size > max_points:
         keep = np.argpartition(raw_values, -max_points)[-max_points:]
         ys = ys[keep]
         xs = xs[keep]
         finite_values = finite_values[keep]
         raw_values = raw_values[keep]
+
     if finite_values.size == 0:
         return CandidatePointCloud(
             coordinates=np.zeros((0, 2), dtype=np.int32),
@@ -106,6 +91,7 @@ def make_point_cloud(
     else:
         scaled = (finite_values - z_min) / (z_max - z_min)
         quantized = np.clip(np.round(scaled * (z_levels - 1)), 0, z_levels - 1).astype(np.int32)
+
     coordinates = np.stack([ys, xs], axis=1).astype(np.int32)
     return CandidatePointCloud(
         coordinates=coordinates,
@@ -118,20 +104,11 @@ def make_point_cloud(
 
 
 def pairwise_distance_matrix(point_cloud: CandidatePointCloud, c_weight: float) -> np.ndarray:
-    """ Computes a pairwise distance matrix for the candidate points in the point cloud, combining spatial and intensity differences."""
+    """Computes a pairwise distance matrix for the candidate points in the point cloud."""
     coords = point_cloud.coordinates.astype(np.float32)
-
-    # FIX: Paper Eq.(1) defines D(i,j) = sqrt(D_sp^2 + c*(z_i^2 + z_j^2))
-    # where z_i = f(y_i) are the FLOAT transformed gray-level values, NOT quantized integers.
-    # The quantized values are only used in the volume computation (morphological dilation).
-    #
-    # Bug: using quantized integers (0-127) causes the z-axis to dominate by ~16000x since
-    # the quantization stretches all near-0 float values to the full [0, z_levels-1] range.
-    # Two points with nearly identical float z (both near 0) get large artificial z-distances.
-    #
-    # OLD (wrong): z2 = np.square(point_cloud.quantized.astype(np.float32))
-    z2 = np.square(point_cloud.transformed.astype(np.float32))  # FIXED: use actual float z values
-
+    # FIX: use float transformed z, not quantized integers (same fix as model.py)
+    # z2 = np.square(point_cloud.quantized.astype(np.float32))  # WRONG
+    z2 = np.square(point_cloud.transformed.astype(np.float32))  # FIXED
     delta = coords[:, None, :] - coords[None, :, :]
     spatial = np.sqrt(np.sum(delta * delta, axis=-1))
     distance = np.sqrt(spatial * spatial + c_weight * (z2[:, None] + z2[None, :]))
@@ -139,66 +116,58 @@ def pairwise_distance_matrix(point_cloud: CandidatePointCloud, c_weight: float) 
     return distance
 
 
-def _condensed(square_matrix) -> np.ndarray:
-    """ Converts a square distance matrix to condensed form as required by scipy's hierarchical clustering functions."""
+def _condensed(square_matrix: np.ndarray) -> np.ndarray:
+    """Converts a square distance matrix to condensed form."""
     rows, cols = np.triu_indices(square_matrix.shape[0], 1)
     return square_matrix[rows, cols]
 
 
-# def _discrete_dilated_volume(
-#     cluster_xy: np.ndarray,
-#     cluster_z: np.ndarray,
-#     radius: float,
-#     image_shape: tuple[int, int],
-#     z_levels: int,
-#     c_weight: float,
-# ) -> float:
-#     """
-#     Computes the volume of the union of discrete dilated spheres around the cluster points in the 
-#     3D space defined by spatial coordinates and quantized intensity levels.
-    
-#     - it is needed to compute the NFA of a cluster candidate by estimating the 
-#     probability of observing a cluster of that size and density under a random model.
-#     """
-#     if cluster_xy.size == 0 or radius <= 0:
-#         return 0.0
-#     height, width = image_shape
-#     occupancy = np.zeros((z_levels, height, width), dtype=bool)
-#     z_grid = np.arange(z_levels, dtype=np.float32)
-#     for (y, x), zi in zip(cluster_xy, cluster_z, strict=True):
-#         valid_z = np.where(c_weight * (float(zi) ** 2 + z_grid ** 2) <= radius ** 2)[0]
-#         for z in valid_z:
-#             radius_sq = radius ** 2 - c_weight * (float(zi) ** 2 + float(z) ** 2)
-#             if radius_sq <= 0:
-#                 continue
-#             rr, cc = disk((int(y), int(x)), float(np.sqrt(radius_sq)), shape=(height, width))
-#             occupancy[z, rr, cc] = True
-#     cube_volume = float(height * width * z_levels)
-#     return float(occupancy.sum()) / cube_volume
-
-_disk_offset_cache = {}
+_disk_offset_cache: dict[float, tuple[np.ndarray, np.ndarray]] = {}
 
 
-def get_disk_offsets(radius: float):
-    """Cache disk offsets for a given radius."""
+def get_disk_offsets(radius: float) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Caches the same rounded disk offsets as model.py, so this backend stays
+    behaviorally aligned with the current reference implementation.
+    """
     key = round(radius, 4)
-
     if key not in _disk_offset_cache:
         r_int = int(np.ceil(radius))
         patch_shape = (2 * r_int + 1, 2 * r_int + 1)
         center = (r_int, r_int)
-
         rr, cc = disk(center, radius, shape=patch_shape)
-
-        rr_offset = rr - r_int
-        cc_offset = cc - r_int
-
-        _disk_offset_cache[key] = (rr_offset, cc_offset)
-
+        _disk_offset_cache[key] = (
+            (rr - r_int).astype(np.int32),
+            (cc - r_int).astype(np.int32),
+        )
     return _disk_offset_cache[key]
 
 
-def discrete_dilated_volume_cached(
+@njit(cache=True)
+def _paint_offsets(
+    occupancy: np.ndarray,
+    z_index: int,
+    ys: np.ndarray,
+    xs: np.ndarray,
+    rr_offset: np.ndarray,
+    cc_offset: np.ndarray,
+) -> None:
+    height = occupancy.shape[1]
+    width = occupancy.shape[2]
+
+    for point_idx in range(ys.shape[0]):
+        base_y = ys[point_idx]
+        base_x = xs[point_idx]
+
+        for offset_idx in range(rr_offset.shape[0]):
+            rr = base_y + rr_offset[offset_idx]
+            cc = base_x + cc_offset[offset_idx]
+
+            if 0 <= rr < height and 0 <= cc < width:
+                occupancy[z_index, rr, cc] = True
+
+
+def discrete_dilated_volume_numba(
     cluster_xy: np.ndarray,
     cluster_z: np.ndarray,
     radius: float,
@@ -207,49 +176,40 @@ def discrete_dilated_volume_cached(
     c_weight: float,
 ) -> float:
     """
-    Same computation as the original discrete dilated volume,
-    but caches disk offsets to reduce repeated calls to skimage.draw.disk.
+    Computes the same discrete dilated volume as model.py, but uses a Numba
+    kernel for the repeated occupancy writes.
     """
     if cluster_xy.size == 0 or radius <= 0:
         return 0.0
 
     height, width = image_shape
-    occupancy = np.zeros((z_levels, height, width), dtype=bool)
+    occupancy = np.zeros((z_levels, height, width), dtype=np.bool_)
     z_grid = np.arange(z_levels, dtype=np.float32)
+    cluster_z = cluster_z.astype(np.int32, copy=False)
 
-    for (y, x), zi in zip(cluster_xy, cluster_z):
-        valid_z = np.where(
-            c_weight * (float(zi) ** 2 + z_grid ** 2) <= radius ** 2
-        )[0]
+    for zi in np.unique(cluster_z):
+        points = cluster_xy[cluster_z == zi]
+        ys = points[:, 0].astype(np.int32, copy=False)
+        xs = points[:, 1].astype(np.int32, copy=False)
 
+        valid_z = np.where(c_weight * (float(zi) ** 2 + z_grid ** 2) <= radius ** 2)[0]
         for z in valid_z:
             radius_sq = radius ** 2 - c_weight * (float(zi) ** 2 + float(z) ** 2)
             if radius_sq <= 0:
                 continue
 
-            r = float(np.sqrt(radius_sq))
-
-            rr_offset, cc_offset = get_disk_offsets(r)
-
-            rr = rr_offset + int(y)
-            cc = cc_offset + int(x)
-
-            valid = (
-                (rr >= 0) & (rr < height) &
-                (cc >= 0) & (cc < width)
-            )
-
-            occupancy[z, rr[valid], cc[valid]] = True
+            rr_offset, cc_offset = get_disk_offsets(float(np.sqrt(radius_sq)))
+            _paint_offsets(occupancy, int(z), ys, xs, rr_offset, cc_offset)
 
     cube_volume = float(height * width * z_levels)
     return float(occupancy.sum()) / cube_volume
 
 
 def _log_nfa(k: int, m: int, lower_volume: float, upper_volume: float) -> float:
-    """ Computes the logarithm of the Number of False Alarms (NFA) for a cluster candidate based on its size (k), 
-    total number of points (m) and the estimated volumes under the random model."""
+    """Computes the logarithm of the Number of False Alarms for a cluster candidate."""
     if k <= 0 or lower_volume <= 0.0 or upper_volume >= 1.0:
         return np.inf
+
     terms = np.arange(k, m + 1, dtype=np.int64)
     log_choose = gammaln(m + 1) - gammaln(terms + 1) - gammaln(m - terms + 1)
     log_inside = terms * np.log(max(lower_volume, 1e-12))
@@ -258,8 +218,7 @@ def _log_nfa(k: int, m: int, lower_volume: float, upper_volume: float) -> float:
 
 
 def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: float) -> list[ClusterCandidate]:
-    """ Generates a list of cluster candidates from the input point cloud by performing hierarchical 
-    clustering and evaluating the significance of each cluster based on its size and density."""
+    """Generates cluster candidates using the Numba-accelerated volume computation."""
     if len(point_cloud.coordinates) < 2:
         return []
 
@@ -296,6 +255,7 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
         node_id = n_leaves + step
         merged_members = np.concatenate([members[left], members[right]])
         members[node_id] = merged_members
+
         delta = float(row[2])
         merge_distance[node_id] = delta
         parent_distance[left] = delta
@@ -318,7 +278,7 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
         parent_delta_value = parent_distance[node_id]
 
         t0 = time.perf_counter()
-        lower_volume = discrete_dilated_volume_cached(
+        lower_volume = discrete_dilated_volume_numba(
             cluster_xy=cluster_xy,
             cluster_z=cluster_z,
             radius=delta / 2.0,
@@ -329,7 +289,7 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
         timings["lower_volume"] += time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        upper_volume = discrete_dilated_volume_cached(
+        upper_volume = discrete_dilated_volume_numba(
             cluster_xy=cluster_xy,
             cluster_z=cluster_z,
             radius=parent_delta_value,
@@ -348,6 +308,7 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
         )
         timings["log_nfa"] += time.perf_counter() - t0
         significance = -log_nfa if np.isfinite(log_nfa) else float("-inf")
+
         candidates.append(
             ClusterCandidate(
                 node_id=node_id,
@@ -369,11 +330,12 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
 
     return candidates
 
+
 def maximal_meaningful_clusters(candidates: list[ClusterCandidate], top_k: int) -> list[ClusterCandidate]:
-    """ Selects the top_k most meaningful clusters from the list of candidates while ensuring 
-        that selected clusters do not share member points."""
+    """Selects the top_k most meaningful clusters from the list of candidates while ensuring no overlap."""
     selected: list[ClusterCandidate] = []
     occupied: list[set[int]] = []
+
     for candidate in sorted(candidates, key=lambda item: item.significance, reverse=True):
         member_set = set(candidate.member_indices.tolist())
         if any(member_set & current for current in occupied):
@@ -382,4 +344,17 @@ def maximal_meaningful_clusters(candidates: list[ClusterCandidate], top_k: int) 
         occupied.append(member_set)
         if len(selected) >= top_k:
             break
+
     return selected
+
+
+__all__ = [
+    "CandidatePointCloud",
+    "ClusterCandidate",
+    "apply_gray_transform",
+    "make_point_cloud",
+    "pairwise_distance_matrix",
+    "discrete_dilated_volume_numba",
+    "generate_cluster_candidates",
+    "maximal_meaningful_clusters",
+]

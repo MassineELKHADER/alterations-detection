@@ -3,13 +3,20 @@ from dataclasses import dataclass
 import numpy as np
 
 from .config import DetectorConfig
-from .model import (
+from .model_numba import (  # Switched to Numba backend for faster volume computation
     CandidatePointCloud,
     ClusterCandidate,
     generate_cluster_candidates,
     make_point_cloud,
     maximal_meaningful_clusters,
 )
+# from .model import (  # Plain NumPy backend (slower, use for debugging)
+#     CandidatePointCloud,
+#     ClusterCandidate,
+#     generate_cluster_candidates,
+#     make_point_cloud,
+#     maximal_meaningful_clusters,
+# )
 
 # The DetectionResult class encapsulates the results of the alteration detection process, 
 # including the difference map, point cloud, cluster candidates and selected clusters.
