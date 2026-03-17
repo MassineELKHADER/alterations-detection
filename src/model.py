@@ -306,46 +306,64 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
     timings["hierarchy_processing"] = time.perf_counter() - t0
 
     total_nodes = len(hierarchy)
+    M = len(point_cloud.coordinates)
+    large_cluster_skip = int(0.8 * M)
+
     for node_id in tqdm(
         range(n_leaves, n_leaves + total_nodes),
         total=total_nodes,
         desc="Evaluating clusters",
     ):
         member_indices = members[node_id]
-        cluster_xy = point_cloud.coordinates[member_indices]
-        cluster_z = point_cloud.quantized[member_indices]
+        k = len(member_indices)
         delta = merge_distance[node_id]
         parent_delta_value = parent_distance[node_id]
 
+        if k > large_cluster_skip:
+            candidates.append(ClusterCandidate(
+                node_id=node_id, member_indices=member_indices,
+                delta=delta, parent_delta=parent_delta_value,
+                lower_volume=0.0, upper_volume=1.0, significance=float("-inf"),
+            ))
+            continue
+
+        cluster_xy = point_cloud.coordinates[member_indices]
+        cluster_z = point_cloud.quantized[member_indices]
+
+        if delta == 0.0:
+            candidates.append(ClusterCandidate(
+                node_id=node_id, member_indices=member_indices,
+                delta=delta, parent_delta=parent_delta_value,
+                lower_volume=0.0, upper_volume=0.0, significance=float("-inf"),
+            ))
+            continue
+
         t0 = time.perf_counter()
         lower_volume = discrete_dilated_volume_cached(
-            cluster_xy=cluster_xy,
-            cluster_z=cluster_z,
-            radius=delta / 2.0,
-            image_shape=point_cloud.image_shape,
-            z_levels=point_cloud.z_levels,
-            c_weight=c_weight,
+            cluster_xy=cluster_xy, cluster_z=cluster_z,
+            radius=delta / 2.0, image_shape=point_cloud.image_shape,
+            z_levels=point_cloud.z_levels, c_weight=c_weight,
         )
         timings["lower_volume"] += time.perf_counter() - t0
 
+        if lower_volume <= 0.0:
+            candidates.append(ClusterCandidate(
+                node_id=node_id, member_indices=member_indices,
+                delta=delta, parent_delta=parent_delta_value,
+                lower_volume=0.0, upper_volume=0.0, significance=float("-inf"),
+            ))
+            continue
+
         t0 = time.perf_counter()
         upper_volume = discrete_dilated_volume_cached(
-            cluster_xy=cluster_xy,
-            cluster_z=cluster_z,
-            radius=parent_delta_value,
-            image_shape=point_cloud.image_shape,
-            z_levels=point_cloud.z_levels,
-            c_weight=c_weight,
+            cluster_xy=cluster_xy, cluster_z=cluster_z,
+            radius=parent_delta_value, image_shape=point_cloud.image_shape,
+            z_levels=point_cloud.z_levels, c_weight=c_weight,
         )
         timings["upper_volume"] += time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        log_nfa = _log_nfa(
-            k=len(member_indices),
-            m=len(point_cloud.coordinates),
-            lower_volume=lower_volume,
-            upper_volume=upper_volume,
-        )
+        log_nfa = _log_nfa(k=k, m=M, lower_volume=lower_volume, upper_volume=upper_volume)
         timings["log_nfa"] += time.perf_counter() - t0
         significance = -log_nfa if np.isfinite(log_nfa) else float("-inf")
         candidates.append(

@@ -10,7 +10,8 @@ detector:
   # Paper (Section 4 practical note): quantization only used for 3D morphological dilation (volume).
   # Reducing z_levels speeds up volume computation: 32 levels gives ~4x speedup vs 128,
   # with negligible quality loss (all high-diff points have near-zero float z anyway).
-  quantization_levels: 32
+  quantization_levels: 16   # 16 is sufficient (all z near 0 anyway); 2x faster than 32, 8x faster than 128
+  # quantization_levels: 32
   # quantization_levels: 128  # OLD: slow, no quality benefit for near-zero z distributions
 
   # Paper conclusion Section 3.2: use tanh (not inverse)
@@ -24,9 +25,9 @@ detector:
   # max_points=200 hard-limits recall to 200/2300 ~ 8.7% regardless of clustering quality.
   # Increasing max_points improves recall but explodes runtime via O(N^2) distance + O(N) volumes.
   # Compromise: use max_points=1000 with quantization_levels=32 for ~2min runtime.
-  max_points: 1000
+  max_points: null  # No cap = paper behaviour. With early termination + z_levels=16, ~1-2 min/image estimated
+  # max_points: 1000  # Capped, ~10s/image, recall ~27%
   # max_points: 200   # OLD: structurally limits recall to ~8.7%
-  # max_points: 2000  # Too slow: ~3 hours due to O(N^2) scaling
 
 simulation:
   image_height: 120

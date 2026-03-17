@@ -5,6 +5,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 
 from .config import DetectorConfig, PreprocessingConfig, SequenceConfig
 from .datasets import UviflSequence, read_image
@@ -205,25 +206,38 @@ def run_synthetic_study(config: dict, output_root: Path) -> tuple[pd.DataFrame, 
     mask = _synthetic_mask(sim["image_height"], sim["image_width"])
     rng = np.random.default_rng(0)
 
+    omega_values = sim["experiment_one_background_omega_values"]
+    shift_values = sim["experiment_two_foreground_shifts"]
+    repetitions = sim["repetitions"]
+    total_runs = (len(omega_values) + len(shift_values)) * repetitions
+
+    pbar = tqdm(total=total_runs, desc="Synthetic study", unit="run")
+
     rows_one = []
-    for omega in sim["experiment_one_background_omega_values"]:
-        for repetition in range(sim["repetitions"]):
+    for omega in omega_values:
+        for repetition in range(repetitions):
+            pbar.set_postfix({"exp": "1/2", "omega": omega, "rep": repetition})
             background = _nakagami_like(rng, sim["background_shape_mu"], omega, mask.shape)
             foreground = _nakagami_like(rng, sim["foreground_shape_mu"], sim["foreground_omega"], mask.shape) + sim["foreground_base_shift"]
             diff_map = background.copy()
             diff_map[mask] = foreground[mask]
             metrics = _run_detector_on_diff(detector, diff_map, mask)
             rows_one.append({"omega": omega, "repetition": repetition, **metrics})
+            pbar.update(1)
 
     rows_two = []
-    for shift in sim["experiment_two_foreground_shifts"]:
-        for repetition in range(sim["repetitions"]):
+    for shift in shift_values:
+        for repetition in range(repetitions):
+            pbar.set_postfix({"exp": "2/2", "shift": shift, "rep": repetition})
             background = _nakagami_like(rng, sim["background_shape_mu"], 6.0, mask.shape)
             foreground = _nakagami_like(rng, sim["foreground_shape_mu"], sim["foreground_omega"], mask.shape) + shift
             diff_map = background.copy()
             diff_map[mask] = foreground[mask]
             metrics = _run_detector_on_diff(detector, diff_map, mask)
             rows_two.append({"shift": shift, "repetition": repetition, **metrics})
+            pbar.update(1)
+
+    pbar.close()
 
     table_one = pd.DataFrame(rows_one)
     table_two = pd.DataFrame(rows_two)
