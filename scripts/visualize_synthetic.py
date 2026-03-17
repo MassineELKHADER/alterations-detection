@@ -16,10 +16,16 @@ Usage:
 
 import argparse
 from pathlib import Path
+import sys
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
+
+# Allow direct execution via `python scripts/visualize_synthetic.py`.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.config import load_synthetic_config, DetectorConfig
 from src.detector import AContrarioDetector
