@@ -224,13 +224,15 @@ def discrete_dilated_volume_cached(
 
     # Shortcut: c_weight=0 → z-axis irrelevant, volume = 2D spatial area / (H*W)
     if c_weight == 0.0:
+        # Vectorised: broadcast all (y+offset, x+offset) pairs at once — no Python loop over k
         occupancy_2d = np.zeros((height, width), dtype=bool)
         rr_off, cc_off = get_disk_offsets(radius)
-        for (y, x) in cluster_xy:
-            rr = rr_off + int(y)
-            cc = cc_off + int(x)
-            valid = (rr >= 0) & (rr < height) & (cc >= 0) & (cc < width)
-            occupancy_2d[rr[valid], cc[valid]] = True
+        ys = cluster_xy[:, 0]
+        xs = cluster_xy[:, 1]
+        all_rr = (ys[:, None] + rr_off[None, :]).ravel()
+        all_cc = (xs[:, None] + cc_off[None, :]).ravel()
+        valid = (all_rr >= 0) & (all_rr < height) & (all_cc >= 0) & (all_cc < width)
+        occupancy_2d[all_rr[valid], all_cc[valid]] = True
         return float(occupancy_2d.sum()) / float(height * width)
 
     occupancy = np.zeros((z_levels, height, width), dtype=bool)

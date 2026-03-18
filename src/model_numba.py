@@ -192,14 +192,13 @@ def discrete_dilated_volume_numba(
     height, width = image_shape
 
     if c_weight == 0.0:
-        occupancy_2d = np.zeros((height, width), dtype=bool)
+        # Use the Numba kernel on a 1-slice 3D array — avoids Python loop over k points
+        occupancy = np.zeros((1, height, width), dtype=np.bool_)
         rr_off, cc_off = get_disk_offsets(radius)
-        for (y, x) in cluster_xy:
-            rr = rr_off + int(y)
-            cc = cc_off + int(x)
-            valid = (rr >= 0) & (rr < height) & (cc >= 0) & (cc < width)
-            occupancy_2d[rr[valid], cc[valid]] = True
-        return float(occupancy_2d.sum()) / float(height * width)
+        ys = cluster_xy[:, 0].astype(np.int32)
+        xs = cluster_xy[:, 1].astype(np.int32)
+        _paint_offsets(occupancy, 0, ys, xs, rr_off, cc_off)
+        return float(occupancy.sum()) / float(height * width)
 
     occupancy = np.zeros((z_levels, height, width), dtype=np.bool_)
     z_grid = np.arange(z_levels, dtype=np.float32)
