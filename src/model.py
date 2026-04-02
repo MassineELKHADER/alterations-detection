@@ -121,7 +121,7 @@ def pairwise_distance_matrix(point_cloud: CandidatePointCloud, c_weight: float) 
     """ Computes a pairwise distance matrix for the candidate points in the point cloud, combining spatial and intensity differences."""
     coords = point_cloud.coordinates.astype(np.float32)
 
-    # Shortcut: if c_weight=0 the z-axis contributes nothing — pure spatial distance
+    # Shortcut: if c_weight=0 the z-axis contributes nothing - pure spatial distance
     if c_weight == 0.0:
         delta = coords[:, None, :] - coords[None, :, :]
         distance = np.sqrt(np.sum(delta * delta, axis=-1))
@@ -222,9 +222,9 @@ def discrete_dilated_volume_cached(
 
     height, width = image_shape
 
-    # Shortcut: c_weight=0 → z-axis irrelevant, volume = 2D spatial area / (H*W)
+    # Shortcut: c_weight=0 -> z-axis irrelevant, volume = 2D spatial area / (H*W)
     if c_weight == 0.0:
-        # Vectorised: broadcast all (y+offset, x+offset) pairs at once — no Python loop over k
+        # Vectorised: broadcast all (y+offset, x+offset) pairs at once - no Python loop over k
         occupancy_2d = np.zeros((height, width), dtype=bool)
         rr_off, cc_off = get_disk_offsets(radius)
         ys = cluster_xy[:, 0]

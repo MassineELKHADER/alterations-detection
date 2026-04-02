@@ -1,38 +1,15 @@
 detector:
-  # Paper Section 4: "In all our experiments, we set tau=3 which allows us to focus on only 20% of the pixels"
   tau: 3.0
-  # tau: 5.45  # OLD: too aggressive, filters out foreground in early Experiment 2 steps
-
-  # Paper Section 3.3: c controls z vs spatial weight. Paper sets c=0.1 for FLOAT z in [0,1].
-  # This is correct when using the fixed distance (float z, not quantized).
   c_weight: 0.
-
-  # Paper (Section 4 practical note): quantization only used for 3D morphological dilation (volume).
-  # Reducing z_levels speeds up volume computation: 32 levels gives ~4x speedup vs 128,
-  # with negligible quality loss (all high-diff points have near-zero float z anyway).
-  quantization_levels: 16   # 16 is sufficient (all z near 0 anyway); 2x faster than 32, 8x faster than 128
-  # quantization_levels: 32
-  # quantization_levels: 128  # OLD: slow, no quality benefit for near-zero z distributions
-
-  # Paper conclusion Section 3.2: use tanh (not inverse)
+  quantization_levels: 16
   transform: tanh
-  # transform: inverse  # OLD: wrong formula was used, and paper prefers tanh anyway
-
   significance_top_k: 4
 
-  # NOTE on max_points: paper uses NO max_points cap (only tau controls candidate count).
-  # With tau=3, ~20% of pixels survive. For a 120x180 image that is ~4300 points.
-  # max_points=200 hard-limits recall to 200/2300 ~ 8.7% regardless of clustering quality.
-  # Increasing max_points improves recall but explodes runtime via O(N^2) distance + O(N) volumes.
-  # Compromise: use max_points=1000 with quantization_levels=32 for ~2min runtime.
-  max_points: null  # No cap = paper behaviour. With early termination + z_levels=16, ~1-2 min/image estimated
-  # max_points: 1000  # Capped, ~10s/image, recall ~27%
-  # max_points: 200   # OLD: structurally limits recall to ~8.7%
-
+  max_points: null 
 simulation:
   image_height: 120
   image_width: 180
-  repetitions: 10   # Set to 10 for statistically meaningful results (paper uses 10)
+  repetitions: 10   # number of repetitions per experiment
   background_shape_mu: 0.6
   experiment_one_background_omega_values: [2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 10.5, 11.0, 12.0, 13.0, 14.0, 15.0]
   experiment_two_foreground_shifts: [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5]

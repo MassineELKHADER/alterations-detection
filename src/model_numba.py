@@ -284,7 +284,7 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
 
     total_nodes = len(hierarchy)
     M = len(point_cloud.coordinates)
-    # Skip clusters larger than this fraction of M — upper_volume → 1 anyway (NFA = inf)
+    # Skip clusters larger than this fraction of M — upper_volume -> 1 anyway (NFA = inf)
     large_cluster_skip = int(0.8 * M)
 
     for node_id in tqdm(
@@ -297,7 +297,7 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
         delta = merge_distance[node_id]
         parent_delta_value = parent_distance[node_id]
 
-        # Early exit 1: large clusters are trivially insignificant (upper_volume → 1)
+        # Early exit 1: large clusters are trivially insignificant (upper_volume -> 1)
         if k > large_cluster_skip:
             candidates.append(ClusterCandidate(
                 node_id=node_id, member_indices=member_indices,
@@ -309,7 +309,7 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
         cluster_xy = point_cloud.coordinates[member_indices]
         cluster_z = point_cloud.quantized[member_indices]
 
-        # Early exit 2: zero merge distance → lower_volume will be 0 → NFA = inf
+        # Early exit 2: zero merge distance -> lower_volume will be 0 -> NFA = inf
         if delta == 0.0:
             candidates.append(ClusterCandidate(
                 node_id=node_id, member_indices=member_indices,
@@ -326,7 +326,7 @@ def generate_cluster_candidates(point_cloud: CandidatePointCloud, c_weight: floa
         )
         timings["lower_volume"] += time.perf_counter() - t0
 
-        # Early exit 3: lower_volume == 0 → NFA = inf regardless of upper_volume (saves expensive upper computation)
+        # Early exit 3: lower_volume == 0 -> NFA = inf regardless of upper_volume (saves expensive upper computation)
         if lower_volume <= 0.0:
             candidates.append(ClusterCandidate(
                 node_id=node_id, member_indices=member_indices,

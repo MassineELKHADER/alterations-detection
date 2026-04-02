@@ -1,0 +1,10 @@
+numpy
+scipy
+pandas
+matplotlib
+opencv-python
+scikit-image
+PyYAML
+tqdm
+numba
+hdbscan
